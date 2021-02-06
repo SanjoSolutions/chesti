@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+<script>
+  const mapWidth = 20
+  const mapHeight = 20
+  const tileWidth = 16
+  const tileHeight = 16
+  const player = {}
+  const bobbi = {}
+  const chests = []
+
+  function createRandomPosition() {
+    return {
+      x: Math.floor(Math.random() * mapWidth),
+      y: Math.floor(Math.random() * mapHeight),
+    }
+  }
+
+  function createRandomChest() {
+    return {
+      in: Math.random() < 0.5 ? true : false,
+      ...createRandomPosition(),
+    }
+  }
+
+  for (let index = 0; index < 10; index++) {
+    const chest = createRandomChest()
+    chests.push(chest)
+  }
+
+  Object.assign(player, createRandomPosition())
+  Object.assign(bobbi, createRandomPosition())
+
+  const canvas = document.createElement('canvas')
+  canvas.width = mapWidth * tileWidth
+  canvas.height = mapHeight * tileHeight
+  document.body.appendChild(canvas)
+  const context = canvas.getContext('2d')
+
+  function render() {
+    context.fillStyle = 'green'
+    context.fillRect(0, 0, mapWidth * tileWidth, mapHeight * tileHeight)
+
+    for (const chest of chests) {
+      context.fillStyle = 'brown'
+      context.fillRect(chest.x * tileWidth, chest.y * tileHeight, tileWidth, tileHeight)
+      if (chest.open) {
+        context.fillStyle = chest.in ? '#ffe492' : 'white'
+        context.fillRect(
+          chest.x * tileWidth + 0.2 * tileWidth,
+          chest.y * tileHeight + 0.2 * tileHeight,
+          tileWidth - 0.4 * tileWidth,
+          tileHeight - 0.4 * tileHeight
+        )
+      }
+    }
+
+    context.fillStyle = 'black'
+    context.fillRect(player.x * tileWidth, player.y * tileHeight, tileWidth, tileHeight)
+
+    context.fillStyle = 'gray'
+    context.fillRect(bobbi.x * tileWidth, bobbi.y * tileHeight, tileWidth, tileHeight)
+  }
+
+  const keyStates = new Map([
+    ['ArrowUp', false],
+    ['ArrowRight', false],
+    ['ArrowDown', false],
+    ['ArrowLeft', false]
+  ])
+
+  const movementStep = 0.02
+  const keyStateToMovement = new Map([
+    ['ArrowUp', {x: 0, y: -movementStep}],
+    ['ArrowRight', {x: movementStep, y: 0}],
+    ['ArrowDown', {x: 0, y: movementStep}],
+    ['ArrowLeft', {x: -movementStep, y: 0}]
+  ])
+
+  window.addEventListener('keydown', function (event) {
+    const code = event.code
+    if (keyStates.has(code)) {
+      keyStates.set(code, true)
+      event.preventDefault()
+    } else if (code === 'Space') {
+      openClosestCloseChest()
+      event.preventDefault()
+    }
+  })
+
+  function openClosestCloseChest() {
+    const closestCloseChest = getClosestCloseChest()
+    if (closestCloseChest) {
+      openChest(closestCloseChest)
+    }
+  }
+
+  function getClosestCloseChest() {
+    return getClosestChest(getCloseChests())
+  }
+
+  function openChest(chest) {
+    chest.open = true
+  }
+
+  function isChestClose(chest) {
+    const playerCenter = getCenter(player)
+    const chestCenter = getCenter(chest)
+    const distanceTolerance = 0.2
+    return (
+      distance1d(playerCenter.x, chestCenter.x) <= (1 + distanceTolerance) * tileWidth ||
+      distance1d(playerCenter.y, chestCenter.y) <= (1 + distanceTolerance) * tileHeight
+    )
+  }
+
+  function getCenter(entity) {
+    return {
+      x: entity.x * tileWidth + 0.5 * tileWidth,
+      y: entity.y * tileHeight + 0.5 * tileHeight
+    }
+  }
+
+  function distance1d(a, b) {
+    return Math.abs(b - a)
+  }
+
+  function getCloseChests() {
+    return chests.filter(isChestClose)
+  }
+
+  function getClosestChest(chests) {
+    const chestsWithDistance = chests.map(chest => ({
+      chest,
+      distance: distance(player, chest)
+    }))
+    chestsWithDistance.sort(compareDistances)
+    return chestsWithDistance[0]?.chest || null
+  }
+
+  function compareDistances(a, b) {
+    return a.distance - b.distance
+  }
+
+  function distance(a, b) {
+    const aCenter = getCenter(a)
+    const bCenter = getCenter(b)
+    return Math.sqrt((bCenter.x - aCenter.x) ** 2 + (bCenter.y - aCenter.y) ** 2)
+  }
+
+  function intersects(rectangleA, rectangleB) {
+    const centerA = getRectangleCenter(rectangleA)
+    const centerB = getRectangleCenter(rectangleB)
+    return (
+      distance1d(centerA.x, centerB.x) < 0.5 * (rectangleA.width + rectangleB.width) &&
+      distance1d(centerA.y, centerB.y) < 0.5 * (rectangleB.height + rectangleB.height)
+    )
+  }
+
+  function getRectangleCenter(rectangle) {
+    const {x, y, width, height} = rectangle
+    return {
+      x: x + 0.5 * width,
+      y: y + 0.5 * height
+    }
+  }
+
+  window.addEventListener('keyup', function (event) {
+    const code = event.code
+    if (keyStates.has(code)) {
+      keyStates.set(code, false)
+      event.preventDefault()
+    }
+  })
+
+  function onTick() {
+    movePlayer()
+    moveBobbi()
+    render()
+    requestAnimationFrame(onTick)
+  }
+
+  function movePlayer() {
+    for (const [code, movement] of keyStateToMovement) {
+      if (keyStates.get(code)) {
+        player.x += movement.x
+        player.y += movement.y
+      }
+    }
+  }
+
+  function moveBobbi() {
+    if (Math.random() < 0.5) {
+      if (player.x < bobbi.x) {
+        bobbi.x -= movementStep
+      } else if (player.x > bobbi.x) {
+        bobbi.x += movementStep
+      }
+    }
+    if (Math.random() < 0.5) {
+      if (player.y < bobbi.y) {
+        bobbi.y -= movementStep
+      } else if (player.y > bobbi.y) {
+        bobbi.y += movementStep
+      }
+    }
+  }
+
+  render()
+  requestAnimationFrame(onTick)
+</script>
+</body>
+</html>
